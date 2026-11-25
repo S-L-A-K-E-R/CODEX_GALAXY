@@ -32,7 +32,7 @@ Then visit `http://localhost:8000`. Alternatively, publish the repository root u
 4. Optionally type an exact speed (0–10,000 km/s), azimuth (+X toward +Z), or elevation (+Y) for a fully 3D launch. The readout shows XYZ velocity components in km/s. The arrow is a screen-space preview, not a predicted trajectory, and extreme lengths are capped visually.
 5. Click **Insert object** or press Enter when the viewport is focused. Press Play to simulate. Reposition returns to the first step; Esc or × cancels without adding a body.
 
-Dragging aims in the XZ orbital plane; enter elevation for an inclined launch. Velocity is absolute in the simulation frame, not added to the primary's velocity. While aiming, shift/right drag pans and scrolling zooms; reposition or tilt the camera before aiming if the orbital plane is edge-on. Invalid positions, overlaps and non-finite or out-of-range launch inputs are rejected. Circular orbit, stationary and primary velocity remain selectable for one-click insertion.
+Dragging aims in the XZ orbital plane; enter elevation for an inclined launch. Velocity is absolute in the simulation frame, not added to the primary's velocity. While aiming, Alt+left drag orbits, Shift/right drag pans and scrolling zooms. Tilt the camera if the orbital plane is edge-on. Invalid positions, overlaps and non-finite or out-of-range launch inputs are rejected. Circular orbit, stationary and primary velocity remain selectable for one-click insertion.
 
 ## Force analysis
 
