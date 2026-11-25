@@ -23,11 +23,27 @@ let nextId=1;
 function body(spec){return {id:nextId++,name:spec.name,kind:spec.kind||'rock',color:spec.color||'#aaa',mass:spec.mass,radius:spec.radius,pos:[...(spec.pos||[0,0,0])],vel:[...(spec.vel||[0,0,0])],trail:[],lastTrail:-Infinity,orbit:spec.orbit||0};}
 function solar(){const sun=body({...catalog[0],name:'Sun'});const data=[['Mercury',.387,.0553,.383,'#a9a39a','rock',.1],['Venus',.723,.815,.949,'#dbb779','rock',1.8],['Earth',1,1,1,'#4987b9','earth',3.1],['Mars',1.524,.107,.532,'#c7764d','rock',4.7],['Jupiter',5.203,317.8,11.21,'#d2ad88','gas',.8],['Saturn',9.537,95.16,9.45,'#d9bd8b','ring',2.5],['Uranus',19.19,14.54,4.01,'#86d1d5','ice',4.1],['Neptune',30.07,17.15,3.88,'#557ddc','ice',5.6]];const bs=[sun,...data.map(([name,a,m,r,color,kind,t])=>body({name,mass:m*EARTH,radius:r*R_EARTH,color,kind,orbit:a,pos:[a*Math.cos(t),0,a*Math.sin(t)],vel:[-Math.sin(t)*Math.sqrt(G/a),0,Math.cos(t)*Math.sqrt(G/a)]}))];return centerMomentum(bs);}
 function centerMomentum(bs){let m=0,p=[0,0,0],v=[0,0,0];for(const b of bs){m+=b.mass;p=V.add(p,V.mul(b.pos,b.mass));v=V.add(v,V.mul(b.vel,b.mass));}if(m>0)for(const b of bs){b.pos=V.sub(b.pos,V.mul(p,1/m));b.vel=V.sub(b.vel,V.mul(v,1/m));}return bs;}
-function accelerations(bs){const a=bs.map(()=>[0,0,0]);for(let i=0;i<bs.length;i++)for(let j=i+1;j<bs.length;j++){const d=V.sub(bs[j].pos,bs[i].pos),r2=V.dot(d,d),soft=Math.max(1e-10,(bs[i].radius+bs[j].radius)*.12),k=G/Math.pow(r2+soft*soft,1.5);for(let n=0;n<3;n++){a[i][n]+=k*bs[j].mass*d[n];a[j][n]-=k*bs[i].mass*d[n];}}return a;}
+// The diagnostics and integrator share exactly the same softened gravity kernel.
+function gravityKernel(a,b){const d=V.sub(b.pos,a.pos),r2=V.dot(d,d),soft=Math.max(1e-10,(a.radius+b.radius)*.12);return {d,k:G/Math.pow(r2+soft*soft,1.5)};}
+function forceAnalysis(bs,target){
+  if(!bs.includes(target))return null;
+  const acceleration=[0,0,0], contributions=[];
+  for(const source of bs){
+    if(source===target)continue;
+    const {d,k}=gravityKernel(target,source);
+    const a=d.map(x=>k*source.mass*x);
+    for(let i=0;i<3;i++)acceleration[i]+=a[i];
+    const force=V.mul(a,target.mass);
+    contributions.push({source,acceleration:a,force,magnitude:V.len(force)});
+  }
+  const force=V.mul(acceleration,target.mass);
+  return {acceleration,force,magnitude:V.len(force),contributions,totalMagnitude:contributions.reduce((s,x)=>s+x.magnitude,0)};
+}
+function accelerations(bs){const a=bs.map(()=>[0,0,0]);for(let i=0;i<bs.length;i++)for(let j=i+1;j<bs.length;j++){const {d,k}=gravityKernel(bs[i],bs[j]);for(let n=0;n<3;n++){a[i][n]+=k*bs[j].mass*d[n];a[j][n]-=k*bs[i].mass*d[n];}}return a;}
 function merge(bs,events){for(let i=0;i<bs.length;i++)for(let j=i+1;j<bs.length;j++){let a=bs[i],b=bs[j];if(V.len(V.sub(a.pos,b.pos))>a.radius+b.radius)continue;const keep=a.mass>=b.mass?a:b,other=keep===a?b:a,m=a.mass+b.mass;keep.pos=V.mul(V.add(V.mul(a.pos,a.mass),V.mul(b.pos,b.mass)),1/m);keep.vel=V.mul(V.add(V.mul(a.vel,a.mass),V.mul(b.vel,b.mass)),1/m);keep.mass=m;keep.radius=Math.cbrt(a.radius**3+b.radius**3);keep.orbit=0;events.push({name:keep.name+' absorbed '+other.name,removed:other.id,kept:keep.id});bs.splice(bs.indexOf(other),1);i=-1;break;}}
 function step(bs,dt,events=[]){merge(bs,events);const a=accelerations(bs);for(let i=0;i<bs.length;i++){const b=bs[i];b.vel=V.add(b.vel,V.mul(a[i],dt*.5));b.pos=V.add(b.pos,V.mul(b.vel,dt));}const a2=accelerations(bs);for(let i=0;i<bs.length;i++)bs[i].vel=V.add(bs[i].vel,V.mul(a2[i],dt*.5));merge(bs,events);}
 function safeDt(bs){let dt=.2;for(let i=0;i<bs.length;i++)for(let j=i+1;j<bs.length;j++){let a=bs[i],b=bs[j],r=V.len(V.sub(a.pos,b.pos)),v=V.len(V.sub(a.vel,b.vel));if(r>0){dt=Math.min(dt,.035*Math.sqrt(r**3/(G*(a.mass+b.mass))));if(v>0)dt=Math.min(dt,.15*r/v);}}return Math.max(1e-7,dt);}
 function circularVelocity(pos,primary){if(!primary)return [0,0,0];let d=V.sub(pos,primary.pos),r=V.len(d);if(r<1e-9)return [...primary.vel];let t=V.unit(V.cross(d,[0,1,0]));if(V.len(t)<.001)t=V.unit(V.cross(d,[1,0,0]));return V.add(primary.vel,V.mul(t,Math.sqrt(G*primary.mass/r)));}
 function restore(data){if(!Array.isArray(data)||data.length>100)throw Error('Invalid body list');return data.map(b=>{if(!b||typeof b.name!=='string'||!Number.isFinite(b.mass)||b.mass<=0||b.mass>1e5||!Number.isFinite(b.radius)||b.radius<=0||b.radius>1e3||!['pos','vel'].every(k=>Array.isArray(b[k])&&b[k].length===3&&b[k].every(x=>Number.isFinite(x)&&Math.abs(x)<1e8)))throw Error('Invalid body data');return body({name:b.name.slice(0,64),mass:b.mass,radius:b.radius,pos:b.pos,vel:b.vel,kind:['star','earth','rock','gas','ring','ice','blackhole'].includes(b.kind)?b.kind:'rock',color:/^#[0-9a-f]{6}$/i.test(b.color)?b.color:'#aaaaaa',orbit:Number.isFinite(b.orbit)?Math.max(0,b.orbit):0});});}
-const api={G,EARTH,R_EARTH,R_SUN,V,catalog,body,solar,step,safeDt,circularVelocity,restore,centerMomentum};if(typeof module!=='undefined')module.exports=api;else root.GalaxyPhysics=api;
+const api={G,EARTH,R_EARTH,R_SUN,V,catalog,body,solar,step,safeDt,circularVelocity,restore,centerMomentum,forceAnalysis,accelerations};if(typeof module!=='undefined')module.exports=api;else root.GalaxyPhysics=api;
 })(typeof globalThis!=='undefined'?globalThis:this);

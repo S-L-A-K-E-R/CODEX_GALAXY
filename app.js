@@ -1,6 +1,8 @@
 'use strict';
 const P=GalaxyPhysics,S=GalaxyPresets,V=P.V,$=id=>document.getElementById(id),canvas=$('universe'),ctx=canvas.getContext('2d');
 let bodies=P.solar(),elapsed=0,paused=true,warp=10,warps=[1,10,50,100,250,500,1000],scenario='SOL SYSTEM',presetId='solar',epochMs=null,selected=bodies[0].id,placement=null,session=false,showGrid=true,showTrails=true,showLabels=true,physical=false,following=false,category='All',W=0,H=0,DPR=1,frameTime=0,lag=false,toastTimer,projected=[],pointer=null,drag=null;
+let showForces=true,forceScale='log',forcePanelOpen=true,lastForceRefresh=-Infinity;
+const AU_DAY2_TO_SI=149597870700/(86400**2),FORCE_TO_N=1.98847e30*AU_DAY2_TO_SI;
 const camera={yaw:.25,pitch:.88,distance:68,target:[0,0,0]}, cats=[['All','✦'],['Stars','☀'],['Planets','◉'],['Moons','☾'],['Small bodies','☄'],['Exotics','◎']];
 const rng=seed=>()=>{seed=(seed*1664525+1013904223)>>>0;return seed/4294967296};const rnd=rng(8611),stars=Array.from({length:1900},()=>{let z=rnd()*2-1,t=rnd()*Math.PI*2,r=Math.sqrt(1-z*z);return {p:[r*Math.cos(t),z,r*Math.sin(t)],size:.3+rnd()**4*1.5,a:.15+rnd()*.7,color:rnd()>.84?'#9dc5ff':rnd()>.85?'#ffe3b7':'#e5efff'}});
 function rgba(hex,a){return `rgba(${parseInt(hex.slice(1,3),16)},${parseInt(hex.slice(3,5),16)},${parseInt(hex.slice(5,7),16)},${a})`}
@@ -17,6 +19,53 @@ function sphere(g,x,y,r,b,light=[-.65,-.5]){if(r<.15)return;const color=b.color,
  g.restore();if(kind==='blackhole'){g.save();g.translate(x,y);g.rotate(-.25);g.strokeStyle='#c6a8ff';g.shadowColor='#b69aff';g.shadowBlur=8;g.lineWidth=Math.max(1,r*.13);g.beginPath();g.ellipse(0,0,r*1.65,r*.48,0,0,Math.PI*2);g.stroke();g.restore();}}
 function icon(c,b){const g=c.getContext('2d'),w=c.width,h=c.height;g.clearRect(0,0,w,h);sphere(g,w/2,h/2,Math.min(w,h)*(b.kind==='star'?.24:b.kind==='ring'?.27:.32),b);}
 function drawLine(points,c,color,dash=[]){ctx.beginPath();let start=true;for(let p of points){let q=project(p,c);if(!q){start=true;continue;}if(start){ctx.moveTo(q.x,q.y);start=false;}else ctx.lineTo(q.x,q.y);}ctx.strokeStyle=color;ctx.lineWidth=1;ctx.setLineDash(dash);ctx.stroke();ctx.setLineDash([]);}
+// Direction is the perspective projection's local derivative at the selected body.
+// Length uses a common, view-relative scale; this is a diagnostic glyph, not a position.
+function forceArrow(p,r,vector,magnitude,reference,c,net){
+  if(!(magnitude>0)||!Number.isFinite(magnitude)||!(reference>0))return null;
+  const u=V.unit(vector),z=V.dot(u,c.forward);
+  const dx=V.dot(u,c.right)-(p.x-W/2)/c.f*z;
+  const dy=-V.dot(u,c.up)-(p.y-H/2)/c.f*z;
+  const n=Math.hypot(dx,dy);
+  if(n<.001||!Number.isFinite(n))return null;
+  const ratio=Math.min(1,magnitude/reference);
+  // Log mode keeps even very weak nonzero influences visible; linear mode preserves ratios.
+  const scaled=forceScale==='log'?Math.log1p(ratio*1e8)/Math.log1p(1e8):ratio;
+  const length=Math.min(118,Math.max(65,Math.min(W,H)*.19))*(forceScale==='log'?(.11+.89*scaled):scaled)*Math.min(1,n);
+  if(length<.6)return null;
+  const x=dx/n,y=dy/n,offset=Math.max(3,r+3),sx=p.x+x*offset,sy=p.y+y*offset,ex=sx+x*length,ey=sy+y*length;
+  const color=net?'#71d6e6':'#f6bc64',head=Math.min(net?11:7,length*.45);
+  ctx.save();ctx.strokeStyle=color;ctx.fillStyle=color;ctx.lineWidth=net?4:1.5;ctx.lineCap='round';ctx.globalAlpha=net?.95:.88;
+  ctx.setLineDash(net?[]:[4,3]);ctx.beginPath();ctx.moveTo(sx,sy);ctx.lineTo(ex,ey);ctx.stroke();
+  ctx.setLineDash([]);ctx.beginPath();ctx.moveTo(ex,ey);ctx.lineTo(ex-x*head-y*head*.48,ey-y*head+x*head*.48);ctx.lineTo(ex-x*head+y*head*.48,ey-y*head-x*head*.48);ctx.closePath();ctx.fill();ctx.restore();
+  return {x:ex,y:ey};
+}
+function drawForces(c,analysis){
+  const item=projected.find(o=>o.b.id===selected);
+  if(!item||!analysis)return;
+  const {p,r}=item;if(!Number.isFinite(r)||r>Math.max(W,H)||p.x<0||p.x>W||p.y<0||p.y>H)return;
+  const reference=Math.max(analysis.magnitude,...analysis.contributions.map(f=>f.magnitude));
+  if(!Number.isFinite(reference)||reference<=0)return;
+  const sorted=[...analysis.contributions].sort((a,b)=>b.magnitude-a.magnitude);
+  const net=forceArrow(p,r,analysis.force,analysis.magnitude,reference,c,true);
+  const labels=[];
+  if(net)labels.push({...net,name:'NET FORCE',net:true});
+  for(const f of sorted){
+    const end=forceArrow(p,r,f.force,f.magnitude,reference,c,false);
+    if(end&&labels.length<7)labels.push({...end,name:f.source.name,net:false});
+  }
+  ctx.save();ctx.font='10px ui-monospace,monospace';ctx.textBaseline='middle';const used=[];
+  for(const label of labels){
+    const name=label.name.slice(0,24),width=ctx.measureText(name).width;
+    const offsets=label.net?[-14,14,-28,28]:[14,-14,28,-28];
+    for(const dy of offsets){
+      const x=Math.max(4,Math.min(W-width-7,label.x+5)),y=label.y+dy,box=[x-3,y-7,x+width+3,y+7];
+      if(y<8||y>H-8||used.some(a=>box[0]<a[2]&&box[2]>a[0]&&box[1]<a[3]&&box[3]>a[1]))continue;
+      used.push(box);ctx.fillStyle='#08111ae8';ctx.fillRect(x-3,y-7,width+6,14);ctx.fillStyle=label.net?'#71d6e6':'#f6bc64';ctx.fillText(name,x,y);break;
+    }
+  }
+  ctx.restore();
+}
 function render(){const c=basis();ctx.clearRect(0,0,W,H);const bg=ctx.createRadialGradient(W*.55,H*.42,0,W*.55,H*.42,Math.max(W,H)*.8);bg.addColorStop(0,'#101c2a');bg.addColorStop(.55,'#080f19');bg.addColorStop(1,'#03070d');ctx.fillStyle=bg;ctx.fillRect(0,0,W,H);
  for(const s of stars){let z=V.dot(s.p,c.forward);if(z<=.1)continue;const x=W/2+V.dot(s.p,c.right)*c.f/z,y=H/2-V.dot(s.p,c.up)*c.f/z;if(x<0||x>W||y<0||y>H)continue;ctx.globalAlpha=s.a;ctx.fillStyle=s.color;ctx.beginPath();ctx.arc(x,y,s.size,0,Math.PI*2);ctx.fill();}ctx.globalAlpha=1;
  const primary=bodies.reduce((a,b)=>!a||b.mass>a.mass?b:a,null);
@@ -25,6 +74,7 @@ function render(){const c=basis();ctx.clearRect(0,0,W,H);const bg=ctx.createRadi
  projected=bodies.map(b=>({b,p:project(b.pos,c)})).filter(o=>o.p).map(o=>({...o,r:visualRadius(o.b,o.p)})).sort((a,b)=>b.p.z-a.p.z);
  for(const {b,p,r} of projected){if(p.x+r*4<0||p.x-r*4>W||p.y+r*4<0||p.y-r*4>H)continue;let light=[-.65,-.5];if(primary&&primary!==b){let s=project(primary.pos,c);if(s){let dx=s.x-p.x,dy=s.y-p.y,n=Math.hypot(dx,dy);if(n>.01)light=[dx/n,dy/n];}}if(r>Math.max(W,H)*2)continue;sphere(ctx,p.x,p.y,r,b,light);if(b.id===selected){ctx.strokeStyle='#75d7e5';ctx.lineWidth=1;let a=Math.max(6,r*1.5+6);for(let t=0;t<4;t++){ctx.beginPath();ctx.arc(p.x,p.y,a,t*Math.PI/2+.19,t*Math.PI/2+1.02);ctx.stroke();}}}
  if(showLabels){const used=[];ctx.font='10px ui-monospace,monospace';ctx.textBaseline='middle';const ordered=[...projected].sort((a,b)=>(b.b.id===selected)-(a.b.id===selected)||b.r-a.r);for(const {b,p,r} of ordered){if(r<.8||p.x<0||p.x>W||p.y<0||p.y>H||r>Math.max(W,H))continue;const label=b.name.toUpperCase(),x=p.x+Math.max(r,4)+9,y=p.y-6,w=ctx.measureText(label).width;const box=[x-3,y-7,x+w+3,y+7];if(used.some(a=>box[0]<a[2]&&box[2]>a[0]&&box[1]<a[3]&&box[3]>a[1]))continue;if(b.id!==selected&&projected.some(o=>o.b!==b&&o.r>r*1.8&&Math.hypot(o.p.x-p.x,o.p.y-p.y)<o.r+9))continue;used.push(box);ctx.fillStyle=b.id===selected?'#80e3ed':'#b7c8d8';ctx.fillText(label,x,y);}}
+ const analysis=P.forceAnalysis(bodies,current());if(showForces)drawForces(c,analysis);refreshForcePanel(analysis);
  if(placement&&pointer){const pos=screenPlane(pointer.x,pointer.y,c);if(pos){const p=project(pos,c);if(p){ctx.save();ctx.globalAlpha=.72;sphere(ctx,p.x,p.y,11,placement);ctx.strokeStyle='#f6bc64';ctx.setLineDash([3,4]);ctx.beginPath();ctx.arc(p.x,p.y,20,0,Math.PI*2);ctx.stroke();ctx.setLineDash([]);ctx.font='11px ui-monospace,monospace';ctx.fillStyle='#f6bc64';ctx.fillText(`${V.len(pos).toFixed(3)} AU`,p.x+25,p.y+4);ctx.restore();}}}
  $('cameraReadout').textContent=`CAM / ${camera.distance.toPrecision(3)} AU${following?' / TRACKING':''}`;}
 function notify(msg){$('toast').textContent=msg;$('toast').hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').hidden=true,3300);}
@@ -36,13 +86,52 @@ function cancelPlacement(){placement=null;$('placement').hidden=true;canvas.clas
 function current(){return bodies.find(b=>b.id===selected);}
 function field(container,label,id,value,change,type='number'){let div=document.createElement('div');div.className='field';let l=document.createElement('label');l.htmlFor=id;l.textContent=label;let inp=document.createElement('input');inp.type=type;inp.id=id;inp.value=value;if(type==='number')inp.step='any';inp.onchange=()=>change(inp);div.append(l,inp);container.append(div);}
 function metric(container,label,id){let div=document.createElement('div');div.className='metric';let l=document.createElement('small');l.textContent=label;let v=document.createElement('strong');v.id=id;div.append(l,v);container.append(div);}
-function renderInspector(){const wrap=$('inspectorBody');wrap.replaceChildren();const b=current();if(!b){let p=document.createElement('p');p.className='empty-state';p.textContent='Select a celestial body in the viewport or object list to inspect its properties.';wrap.append(p);return;}const title=document.createElement('div');title.className='selected-title';const c=document.createElement('canvas');c.width=76;c.height=76;icon(c,b);const info=document.createElement('div'),n=document.createElement('strong'),k=document.createElement('small');n.textContent=b.name;k.textContent=b.kind;info.append(n,k);title.append(c,info);wrap.append(title);field(wrap,'Object name','editName',b.name,i=>{b.name=i.value.trim().slice(0,64)||b.name;renderInspector();renderList();},'text');field(wrap,'Mass (solar masses)','editMass',b.mass,i=>{let v=Number(i.value);if(v>0&&v<=1e5&&Number.isFinite(v)){b.mass=v;notify('Mass updated');}else i.value=b.mass;});field(wrap,'Radius (km)','editRadius',Number((b.radius*149597870.7).toPrecision(6)),i=>{let v=Number(i.value);if(v>0&&v<=1.495978707e11&&Number.isFinite(v)){b.radius=v/149597870.7;notify('Radius updated');}else i.value=b.radius*149597870.7;});metric(wrap,'Speed','speedMetric');metric(wrap,'Distance from origin','distMetric');const actions=document.createElement('div');actions.className='inspector-actions';let focus=document.createElement('button');focus.textContent=following?'UNTRACK':'FOCUS';focus.onclick=()=>{if(following){following=false;}else{following=true;camera.target=[...b.pos];camera.distance=Math.max(b.radius*15,1e-6);}renderInspector();};let remove=document.createElement('button');remove.className='danger';remove.textContent='REMOVE';remove.onclick=()=>{bodies=bodies.filter(x=>x!==b);selected=null;following=false;renderInspector();renderList();notify(`${b.name} removed`);};actions.append(focus,remove);wrap.append(actions);const advanced=document.createElement('details');advanced.className='advanced';const heading=document.createElement('summary');heading.textContent='STATE VECTOR / 3D';advanced.append(heading);for(let j=0;j<3;j++){const axis='XYZ'[j];field(advanced,axis+' position (AU)','pos'+j,Number(b.pos[j].toPrecision(7)),i=>{let v=Number(i.value);if(Number.isFinite(v)&&Math.abs(v)<1e8){setPaused(true);b.pos[j]=v;b.trail=[];b.orbit=0;}else i.value=b.pos[j];});field(advanced,axis+' velocity (km/s)','vel'+j,Number((b.vel[j]*149597870.7/86400).toPrecision(7)),i=>{let v=Number(i.value);if(Number.isFinite(v)&&Math.abs(v)<1e8){setPaused(true);b.vel[j]=v*86400/149597870.7;b.trail=[];b.orbit=0;}else i.value=b.vel[j]*149597870.7/86400;});}wrap.append(advanced);updateMetrics();}
+function forceNumber(n){return Number.isFinite(n)?(n===0?'0':n.toExponential(3)):'—';}
+function makeForcePanel(wrap){
+  const details=document.createElement('details');details.className='advanced force-panel';details.open=forcePanelOpen;
+  details.ontoggle=()=>{if(details.isConnected)forcePanelOpen=details.open;};
+  const heading=document.createElement('summary');heading.textContent='FORCE ANALYSIS / 3D';details.append(heading);
+  const legend=document.createElement('div');legend.className='force-legend';
+  for(const [cls,label] of [['net','Net force'],['source','Individual gravity']]){
+    const key=document.createElement('span');key.className=cls;key.textContent='➜ '+label;legend.append(key);
+  }
+  details.append(legend);
+  metric(details,'Net force (N)','netForceMetric');metric(details,'Net acceleration (m/s²)','netAccelerationMetric');
+  const axes=document.createElement('div');axes.id='forceAxes';axes.className='force-axes';details.append(axes);
+  const scale=document.createElement('label');scale.className='force-scale';scale.textContent='Arrow scale';
+  const select=document.createElement('select');select.setAttribute('aria-label','Force arrow scale');
+  for(const [value,label] of [['log','Logarithmic'],['linear','Linear']]){const option=document.createElement('option');option.value=value;option.textContent=label;select.append(option);}
+  select.value=forceScale;select.onchange=()=>{forceScale=select.value;};scale.append(select);details.append(scale);
+  const hint=document.createElement('small');hint.className='force-hint';hint.textContent='Relative lengths · log reveals weak pulls. End-on arrows may disappear. Shares use the sum of individual magnitudes.';details.append(hint);
+  const list=document.createElement('div');list.id='forceSources';list.className='force-sources';details.append(list);
+  wrap.append(details);lastForceRefresh=-Infinity;
+}
+function refreshForcePanel(analysis,immediate=false){
+  const list=$('forceSources');if(!list||!analysis)return;
+  const now=performance.now();if(!immediate&&now-lastForceRefresh<125)return;lastForceRefresh=now;
+  $('netForceMetric').textContent=forceNumber(analysis.magnitude*FORCE_TO_N);
+  $('netAccelerationMetric').textContent=forceNumber(V.len(analysis.acceleration)*AU_DAY2_TO_SI);
+  $('forceAxes').textContent=analysis.force.map((f,i)=>'XYZ'[i]+' '+forceNumber(f*FORCE_TO_N)+' N').join('  ·  ');
+  const fragment=document.createDocumentFragment();
+  const sorted=[...analysis.contributions].sort((a,b)=>b.magnitude-a.magnitude);
+  if(!sorted.length){const empty=document.createElement('small');empty.textContent='No other bodies — zero external gravity.';fragment.append(empty);}
+  for(const f of sorted){
+    const share=analysis.totalMagnitude>0?100*f.magnitude/analysis.totalMagnitude:0;
+    const row=document.createElement('div');row.className='force-source';const name=document.createElement('span');name.textContent=f.source.name;
+    const value=document.createElement('strong');value.textContent=forceNumber(f.magnitude*FORCE_TO_N)+' N';
+    const shareText=document.createElement('small');shareText.textContent=share>0&&share<.01?'<0.01%':share.toFixed(2)+'%';
+    const track=document.createElement('div');track.className='force-track';const fill=document.createElement('i');fill.style.width=Math.min(100,Math.max(0,share))+'%';track.append(fill);
+    row.title=f.force.map((v,i)=>'XYZ'[i]+': '+forceNumber(v*FORCE_TO_N)+' N').join(' | ');row.append(name,value,shareText,track);fragment.append(row);
+  }
+  const scroll=list.scrollTop;list.replaceChildren(fragment);list.scrollTop=scroll;
+}
+function renderInspector(){const wrap=$('inspectorBody');wrap.replaceChildren();const b=current();if(!b){let p=document.createElement('p');p.className='empty-state';p.textContent='Select a celestial body in the viewport or object list to inspect its properties.';wrap.append(p);return;}const title=document.createElement('div');title.className='selected-title';const c=document.createElement('canvas');c.width=76;c.height=76;icon(c,b);const info=document.createElement('div'),n=document.createElement('strong'),k=document.createElement('small');n.textContent=b.name;k.textContent=b.kind;info.append(n,k);title.append(c,info);wrap.append(title);makeForcePanel(wrap);field(wrap,'Object name','editName',b.name,i=>{b.name=i.value.trim().slice(0,64)||b.name;renderInspector();renderList();},'text');field(wrap,'Mass (solar masses)','editMass',b.mass,i=>{let v=Number(i.value);if(v>0&&v<=1e5&&Number.isFinite(v)){b.mass=v;notify('Mass updated');}else i.value=b.mass;});field(wrap,'Radius (km)','editRadius',Number((b.radius*149597870.7).toPrecision(6)),i=>{let v=Number(i.value);if(v>0&&v<=1.495978707e11&&Number.isFinite(v)){b.radius=v/149597870.7;notify('Radius updated');}else i.value=b.radius*149597870.7;});metric(wrap,'Speed','speedMetric');metric(wrap,'Distance from origin','distMetric');const actions=document.createElement('div');actions.className='inspector-actions';let focus=document.createElement('button');focus.textContent=following?'UNTRACK':'FOCUS';focus.onclick=()=>{if(following){following=false;}else{following=true;camera.target=[...b.pos];camera.distance=Math.max(b.radius*15,1e-6);}renderInspector();};let remove=document.createElement('button');remove.className='danger';remove.textContent='REMOVE';remove.onclick=()=>{bodies=bodies.filter(x=>x!==b);selected=null;following=false;renderInspector();renderList();notify(`${b.name} removed`);};actions.append(focus,remove);wrap.append(actions);const advanced=document.createElement('details');advanced.className='advanced';const heading=document.createElement('summary');heading.textContent='STATE VECTOR / 3D';advanced.append(heading);for(let j=0;j<3;j++){const axis='XYZ'[j];field(advanced,axis+' position (AU)','pos'+j,Number(b.pos[j].toPrecision(7)),i=>{let v=Number(i.value);if(Number.isFinite(v)&&Math.abs(v)<1e8){setPaused(true);b.pos[j]=v;b.trail=[];b.orbit=0;}else i.value=b.pos[j];});field(advanced,axis+' velocity (km/s)','vel'+j,Number((b.vel[j]*149597870.7/86400).toPrecision(7)),i=>{let v=Number(i.value);if(Number.isFinite(v)&&Math.abs(v)<1e8){setPaused(true);b.vel[j]=v*86400/149597870.7;b.trail=[];b.orbit=0;}else i.value=b.vel[j]*149597870.7/86400;});}wrap.append(advanced);updateMetrics();refreshForcePanel(P.forceAnalysis(bodies,b),true);}
 function updateMetrics(){const b=current();if(!b||!$('speedMetric'))return;$('speedMetric').textContent=(V.len(b.vel)*149597870.7/86400).toFixed(2)+' km/s';$('distMetric').textContent=V.len(b.pos).toPrecision(4)+' AU';}
 function renderList(){$('objectList').replaceChildren();for(const b of bodies){let row=document.createElement('button');row.className='object-row'+(b.id===selected?' selected':'');let dot=document.createElement('span');dot.className='body-dot';dot.style.setProperty('--body-color',b.color);let name=document.createElement('span');name.textContent=b.name;let type=document.createElement('small');type.textContent=b.kind.toUpperCase();row.append(dot,name,type);row.onclick=()=>selectBody(b.id);row.ondblclick=()=>{following=true;camera.target=[...b.pos];camera.distance=Math.max(b.radius*15,1e-6);renderInspector();};$('objectList').append(row);}$('bodyCount').textContent=String(bodies.length).padStart(2,'0')+' OBJECTS';$('listCount').textContent=String(bodies.length).padStart(2,'0');}
 function selectBody(id){if(selected!==id)following=false;selected=id;$('inspector').classList.remove('collapsed');renderInspector();renderList();}
 function addAt(pos){if(bodies.length>=100){notify('Prototype limit: 100 bodies');return;}const spec=placement,primary=bodies.reduce((a,b)=>!a||b.mass/Math.max(1e-12,V.len(V.sub(pos,b.pos))**2)>a.mass/Math.max(1e-12,V.len(V.sub(pos,a.pos))**2)?b:a,null);let vel=$('velocityMode').value==='orbit'?P.circularVelocity(pos,primary):$('velocityMode').value==='relative'&&primary?[...primary.vel]:[0,0,0];if(primary&&V.len(V.sub(pos,primary.pos))<primary.radius+spec.radius){notify('Choose a position outside the existing body');return;}let name=spec.name,n=2;while(bodies.some(b=>b.name===name))name=spec.name+' '+n++;const b=P.body({...spec,name,pos,vel});bodies.push(b);cancelPlacement();selectBody(b.id);notify(`${b.name} inserted`);}
 function fit(){camera.target=bodies.length?[0,1,2].map(i=>{const coords=bodies.map(b=>b.pos[i]);return (Math.min(...coords)+Math.max(...coords))/2;}):[0,0,0];const extent=Math.max(0,...bodies.map(b=>V.len(V.sub(b.pos,camera.target))+b.radius));camera.distance=bodies.length?Math.max(.00001,extent*(['solar','solar-now'].includes(presetId)?2.25:3.6),['solar','solar-now'].includes(presetId)?68:0):68;camera.yaw=.25;camera.pitch=.88;following=false;renderInspector();}
-$('homeView').onclick=fit;for(const [id,get,set] of [['gridBtn',()=>showGrid,v=>showGrid=v],['trailsBtn',()=>showTrails,v=>showTrails=v],['labelsBtn',()=>showLabels,v=>showLabels=v],['scaleBtn',()=>physical,v=>physical=v]])$(id).onclick=()=>{set(!get());$(id).classList.toggle('active',get());if(id==='scaleBtn')notify(physical?'True physical radii — zoom in to see planets':'Enhanced display radii');};
+$('homeView').onclick=fit;for(const [id,get,set] of [['gridBtn',()=>showGrid,v=>showGrid=v],['trailsBtn',()=>showTrails,v=>showTrails=v],['labelsBtn',()=>showLabels,v=>showLabels=v],['scaleBtn',()=>physical,v=>physical=v],['forceBtn',()=>showForces,v=>showForces=v]])$(id).onclick=()=>{set(!get());$(id).classList.toggle('active',get());if(id==='forceBtn')$(id).setAttribute('aria-pressed',String(showForces));if(id==='scaleBtn')notify(physical?'True physical radii — zoom in to see planets':'Enhanced display radii');};
 $('collapseLibrary').onclick=()=>$('library').classList.toggle('collapsed');$('closeInspector').onclick=()=>$('inspector').classList.toggle('collapsed');
 canvas.addEventListener('pointerdown',e=>{if(e.button!==0&&e.button!==2)return;canvas.setPointerCapture(e.pointerId);drag={x:e.clientX,y:e.clientY,lastX:e.clientX,lastY:e.clientY,moved:false,pan:e.shiftKey||e.button===2};canvas.classList.add('dragging');});canvas.addEventListener('pointermove',e=>{pointer={x:e.clientX,y:e.clientY};if(!drag)return;let dx=e.clientX-drag.lastX,dy=e.clientY-drag.lastY;if(Math.hypot(e.clientX-drag.x,e.clientY-drag.y)>4)drag.moved=true;if(drag.moved){if(drag.pan){const c=basis(),s=camera.distance/c.f;camera.target=V.add(camera.target,V.add(V.mul(c.right,-dx*s),V.mul(c.up,dy*s)));following=false;}else{camera.yaw-=dx*.006;camera.pitch=Math.max(-1.54,Math.min(1.54,camera.pitch+dy*.006));}}drag.lastX=e.clientX;drag.lastY=e.clientY;});canvas.addEventListener('pointerup',e=>{if(!drag)return;const moved=drag.moved;drag=null;canvas.classList.remove('dragging');if(moved||e.button!==0)return;if(placement){let pos=screenPlane(e.clientX,e.clientY,basis());if(pos)addAt(pos);else notify('Tilt the camera toward the orbital plane');return;}let hit=projected.slice().reverse().find(({p,r})=>Math.hypot(p.x-e.clientX,p.y-e.clientY)<Math.max(r+6,10));if(hit)selectBody(hit.b.id);});canvas.addEventListener('pointercancel',()=>{drag=null;canvas.classList.remove('dragging');});canvas.addEventListener('pointerleave',()=>{if(!drag)pointer=null;});canvas.addEventListener('contextmenu',e=>e.preventDefault());canvas.addEventListener('wheel',e=>{e.preventDefault();camera.distance=Math.max(1e-7,Math.min(1e5,camera.distance*Math.exp(e.deltaY*.0014)));},{passive:false});
 function setWarp(w){warp=w;$('warpReadout').textContent=warp+'×';for(const b of $('warpButtons').children)b.classList.toggle('active',Number(b.dataset.warp)===warp);}

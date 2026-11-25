@@ -24,6 +24,12 @@ Then visit `http://localhost:8000`. Alternatively, publish the repository root u
 - Pause or play; time warp from 1× to 1000×, with an accuracy-budget warning and throttling during difficult encounters.
 - Save a system locally or export/import a portable JSON file. The snapshot preserves positions, velocities and simulated time, not trail history or camera state.
 
+## Force analysis
+
+Select any body to inspect its gravitational interactions. Amber dashed arrows show each other body's pull; the thicker cyan arrow is the vector sum. The viewport's **↗** button hides or restores the overlay. The inspector reports net force in newtons, XYZ force components, net acceleration in m/s², and all source magnitudes ranked by their share of the sum of individual magnitudes (not the net force). Hover a source row for its XYZ components. These values update during play, while paused, and after edits.
+
+Arrows are camera-projected 3D directions with relative screen lengths. Logarithmic scaling is the default so weak forces remain visible; choose Linear to compare magnitudes proportionally before projection. End-on or very small arrows may be invisible; only the strongest few sources get viewport labels, but every source remains in the list. Zero net force has no resultant arrow. Diagnostics share the integrator's softened Newtonian gravity formula; no other physical forces are modeled.
+
 ## Solar System Now
 
 Select **NOW** next to Solar System to initialize the Sun and eight planets at the current device-clock instant. The scene starts paused; the UTC simulation date advances with the existing time warp when you press Play. Reset recreates the original launch epoch, and local/JSON saves preserve it. Choose NOW again for a fresh snapshot.

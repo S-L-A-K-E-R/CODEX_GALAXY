@@ -47,3 +47,34 @@ assert.throws(()=>S.create('solar-now',NaN));
 assert.ok(S.validEpoch(Date.UTC(1800,0,1)));
 assert.ok(S.validEpoch(Date.UTC(2050,11,31)));
 console.log('Dated Solar System tests passed: epoch, position, inclination, velocity and validation.');
+
+
+// Force diagnostics: exact engine agreement, direction, cancellation and action/reaction.
+const left=P.body({name:'Left',mass:2,radius:.001,pos:[-1,0,0]});
+const middle=P.body({name:'Middle',mass:3,radius:.001,pos:[0,0,0]});
+const right=P.body({name:'Right',mass:2,radius:.001,pos:[1,0,0]});
+const trio=[left,middle,right], balanced=P.forceAnalysis(trio,middle);
+assert.equal(balanced.contributions.length,2);
+assert.ok(balanced.contributions[0].force[0]<0);
+assert.ok(balanced.contributions[1].force[0]>0);
+assert.equal(balanced.magnitude,0);
+assert.ok(balanced.totalMagnitude>0);
+assert.equal(P.forceAnalysis([middle],middle).magnitude,0);
+assert.equal(P.forceAnalysis([],middle),null);
+right.mass=4;right.pos=[1,2,3];
+const offAxis=P.forceAnalysis(trio,middle);
+assert.ok(offAxis.force[1]>0&&offAxis.force[2]>0);
+const reaction=P.forceAnalysis([middle,right],right).force;
+const action=P.forceAnalysis([middle,right],middle).force;
+assert.ok(V.len(V.add(action,reaction))<1e-15);
+for(const p of S.presets){
+  const scene=S.create(p.id,j2000), engine=P.accelerations(scene);
+  for(let i=0;i<scene.length;i++){
+    const diagnostic=P.forceAnalysis(scene,scene[i]);
+    assert.equal(diagnostic.contributions.length,scene.length-1);
+    assert.ok(V.len(V.sub(diagnostic.acceleration,engine[i]))<=1e-13*Math.max(1,V.len(engine[i])));
+    const sum=diagnostic.contributions.reduce((v,f)=>V.add(v,f.force),[0,0,0]);
+    assert.ok(V.len(V.sub(sum,diagnostic.force))<=1e-13*Math.max(1,diagnostic.totalMagnitude));
+  }
+}
+console.log('Force diagnostics passed: 3D vectors, cancellation, action/reaction and engine agreement for every preset.');

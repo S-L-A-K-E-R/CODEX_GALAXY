@@ -7,3 +7,20 @@
 
 /* Device-clock Solar System launch, alongside the classic preset. */
 .solar-options{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:7px}.solar-options #startNow{color:var(--cyan);min-width:94px;justify-content:center;text-align:center;padding:8px 10px}.solar-options #startNow small{margin:4px 0 0;color:var(--muted);font-size:10px}.mission #utcClock{color:var(--cyan);white-space:nowrap;font-size:10px}@media(max-width:420px){.solar-options #startNow{min-width:76px;padding:6px}.solar-options #startNow small{font-size:9px}.mission #utcClock{font-size:8px}}
+
+/* Selected-body gravity telemetry */
+.force-panel{margin:0 0 12px;padding:0 0 8px;border-bottom:1px solid var(--edge)}
+.force-panel summary{color:var(--cyan)}
+.force-legend{display:flex;flex-wrap:wrap;gap:4px 10px;margin:8px 0;font:10px var(--mono)}
+.force-legend .net{color:var(--cyan);font-weight:700}.force-legend .source{color:var(--amber)}
+.force-panel .metric{margin:4px 0}.force-panel .metric strong{font:11px var(--mono);color:var(--cyan)}
+.force-axes{font:9px/1.6 var(--mono);color:var(--muted);overflow-wrap:anywhere;margin:4px 0 8px}
+.force-scale{display:flex;align-items:center;justify-content:space-between;gap:5px;font:10px var(--mono)}
+.force-scale select{font-size:10px;max-width:60%;padding:4px}
+.force-hint{display:block;font-size:9px;line-height:1.4;margin:7px 0}
+.force-sources{max-height:154px;overflow:auto;scrollbar-width:thin;padding-right:3px;overscroll-behavior:contain}
+.force-source{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:3px 6px;padding:5px 0;border-top:1px solid #34455280;font:10px var(--mono)}
+.force-source>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--amber)}
+.force-source strong{font:10px var(--mono);white-space:nowrap}.force-source small{font:9px var(--mono)}
+.force-track{height:3px;background:#344552;align-self:center;border-radius:2px;overflow:hidden}.force-track i{display:block;height:100%;background:var(--amber)}
+@media(min-width:761px) and (max-width:1100px){.viewtools{flex-wrap:wrap;max-width:calc(100% - 535px)}}
