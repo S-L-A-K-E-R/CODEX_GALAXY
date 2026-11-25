@@ -78,3 +78,29 @@ for(const p of S.presets){
   }
 }
 console.log('Force diagnostics passed: 3D vectors, cancellation, action/reaction and engine agreement for every preset.');
+
+
+// Launch velocity: cardinal axes, elevation, units, magnitude, aim and input limits.
+const near=(actual,expected,tol=1e-12)=>assert.ok(Math.abs(actual-expected)<tol);
+const launchSpeed=42,converted=launchSpeed*P.KM_S_TO_AU_DAY;
+for(const [az,el,expected] of [[0,0,[1,0,0]],[90,0,[0,0,1]],[180,0,[-1,0,0]],[270,0,[0,0,-1]],[0,90,[0,1,0]],[0,-90,[0,-1,0]]]){
+  const velocity=P.launchVelocity(launchSpeed,az,el);
+  expected.forEach((v,i)=>near(velocity[i],v*converted));
+  near(V.len(velocity),converted);
+}
+near(V.len(P.launchVelocity(12,45,30))/P.KM_S_TO_AU_DAY,12);
+assert.deepEqual(P.launchVelocity(0,0,0),[0,0,0]);
+assert.throws(()=>P.launchVelocity(-1,0,0));
+assert.throws(()=>P.launchVelocity(10001,0,0));
+assert.throws(()=>P.launchVelocity(1,0,91));
+assert.throws(()=>P.launchVelocity(NaN,0,0));
+const aimed=P.launchAim([1,0,2],[1,0,4],120,.25);
+near(aimed.speed,30);near(aimed.azimuth,90);near(aimed.elevation,0);
+near(P.launchAim([1,0,2],[0,0,2],100,.05).azimuth,180);
+assert.equal(P.launchAim([1,0,2],[1,0,2],0,.25).speed,0);
+assert.equal(P.launchAim([0,0,0],[1,0,0],100000,5).speed,P.MAX_LAUNCH_SPEED);
+assert.equal(P.launchAim([0,0,0],[1,0,0],100,0),null);
+const launched=P.body({name:'Launch test',mass:1e-8,radius:1e-5,pos:[2,0,1],vel:P.launchVelocity(30,90,0)});
+const start=[...launched.pos];P.step([launched],1);
+near(launched.pos[0],start[0]);near(launched.pos[2]-start[2],30*P.KM_S_TO_AU_DAY);
+console.log('Launch tests passed: 3D direction, km/s units, drag sensitivity, validation and initial motion.');

@@ -18,11 +18,21 @@ Then visit `http://localhost:8000`. Alternatively, publish the repository root u
 
 - Start from a simplified Solar System (Sun and eight planets), a date-specific Solar System using **NOW**, empty space, a scenario library of nine additional experiments, or a JSON save. Each experiment is deterministic; Reset restores its initial conditions, including after saving and loading.
 - Searchable, categorized library of 14 celestial body templates: stars, planets, moons, asteroids, comets and compact objects.
-- Choose a body, then click the orbital plane to place it. Select circular orbital velocity around the locally dominant gravitational body, stationary, or the primary's velocity.
+- Choose a body and click the orbital plane. Set a custom launch vector (default) by dragging from the preview and confirming; or choose circular orbital, stationary, or primary velocity for immediate insertion.
 - Inspect and edit mass, radius, name and the complete 3D state vector. Editing a state vector pauses the simulation.
 - Orbit, pan, zoom, track an object, show reference rings, show recorded trails, and toggle enhanced vs physical radii.
 - Pause or play; time warp from 1× to 1000×, with an accuracy-budget warning and throttling during difficult encounters.
 - Save a system locally or export/import a portable JSON file. The snapshot preserves positions, velocities and simulated time, not trail history or camera state.
+
+## Custom launch velocity
+
+1. Pick a body from the library; leave Velocity on **Custom vector**.
+2. Click the orbital plane to lock its position. The simulation pauses and a ghost appears; the body has not been inserted yet.
+3. Drag outward from the ghost to aim the green velocity arrow. Longer drags set higher speeds; the sensitivity menu gives km/s per screen pixel (0.005 to 5). Drag again to revise the direction.
+4. Optionally type an exact speed (0–10,000 km/s), azimuth (+X toward +Z), or elevation (+Y) for a fully 3D launch. The readout shows XYZ velocity components in km/s. The arrow is a screen-space preview, not a predicted trajectory, and extreme lengths are capped visually.
+5. Click **Insert object** or press Enter when the viewport is focused. Press Play to simulate. Reposition returns to the first step; Esc or × cancels without adding a body.
+
+Dragging aims in the XZ orbital plane; enter elevation for an inclined launch. Velocity is absolute in the simulation frame, not added to the primary's velocity. While aiming, shift/right drag pans and scrolling zooms; reposition or tilt the camera before aiming if the orbital plane is edge-on. Invalid positions, overlaps and non-finite or out-of-range launch inputs are rejected. Circular orbit, stationary and primary velocity remain selectable for one-click insertion.
 
 ## Force analysis
 
@@ -65,6 +75,8 @@ The figure-eight uses a standard equal-mass Newtonian initial condition scaled t
 | Track / zoom in | FOCUS in inspector or double-click a list item |
 | Fit system | Home icon or F |
 | Place | Click a library tile, then click in the viewport |
+| Aim custom launch | Left drag outward from the preview; use numeric fields for exact 3D velocity |
+| Confirm launch | Insert object button or Enter with viewport focus |
 | Cancel placement | Esc or × |
 | Play / pause | Space or play button |
 | Time warp | 1×, 10×, 50×, 100×, 250×, 500×, 1000× |

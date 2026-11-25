@@ -43,7 +43,21 @@ function accelerations(bs){const a=bs.map(()=>[0,0,0]);for(let i=0;i<bs.length;i
 function merge(bs,events){for(let i=0;i<bs.length;i++)for(let j=i+1;j<bs.length;j++){let a=bs[i],b=bs[j];if(V.len(V.sub(a.pos,b.pos))>a.radius+b.radius)continue;const keep=a.mass>=b.mass?a:b,other=keep===a?b:a,m=a.mass+b.mass;keep.pos=V.mul(V.add(V.mul(a.pos,a.mass),V.mul(b.pos,b.mass)),1/m);keep.vel=V.mul(V.add(V.mul(a.vel,a.mass),V.mul(b.vel,b.mass)),1/m);keep.mass=m;keep.radius=Math.cbrt(a.radius**3+b.radius**3);keep.orbit=0;events.push({name:keep.name+' absorbed '+other.name,removed:other.id,kept:keep.id});bs.splice(bs.indexOf(other),1);i=-1;break;}}
 function step(bs,dt,events=[]){merge(bs,events);const a=accelerations(bs);for(let i=0;i<bs.length;i++){const b=bs[i];b.vel=V.add(b.vel,V.mul(a[i],dt*.5));b.pos=V.add(b.pos,V.mul(b.vel,dt));}const a2=accelerations(bs);for(let i=0;i<bs.length;i++)bs[i].vel=V.add(bs[i].vel,V.mul(a2[i],dt*.5));merge(bs,events);}
 function safeDt(bs){let dt=.2;for(let i=0;i<bs.length;i++)for(let j=i+1;j<bs.length;j++){let a=bs[i],b=bs[j],r=V.len(V.sub(a.pos,b.pos)),v=V.len(V.sub(a.vel,b.vel));if(r>0){dt=Math.min(dt,.035*Math.sqrt(r**3/(G*(a.mass+b.mass))));if(v>0)dt=Math.min(dt,.15*r/v);}}return Math.max(1e-7,dt);}
+// Launch controls use world azimuth (+X toward +Z), elevation (+Y), and km/s.
+const MAX_LAUNCH_SPEED=10000,KM_S_TO_AU_DAY=86400/149597870.7;
+function launchVelocity(speed,azimuth,elevation){
+  if(![speed,azimuth,elevation].every(Number.isFinite)||speed<0||speed>MAX_LAUNCH_SPEED||Math.abs(elevation)>90)throw Error('Invalid launch velocity');
+  const a=(azimuth%360)*Math.PI/180,e=elevation*Math.PI/180,s=speed*KM_S_TO_AU_DAY;
+  return [s*Math.cos(e)*Math.cos(a),s*Math.sin(e),s*Math.cos(e)*Math.sin(a)];
+}
+function launchAim(pos,target,pixels,scale){
+  if(!Number.isFinite(pixels)||pixels<0||!Number.isFinite(scale)||scale<=0)return null;
+  const dx=target[0]-pos[0],dz=target[2]-pos[2];
+  if(!Number.isFinite(dx)||!Number.isFinite(dz))return null;
+  if(pixels<2||Math.hypot(dx,dz)===0)return {speed:0,azimuth:0,elevation:0};
+  return {speed:Math.min(MAX_LAUNCH_SPEED,pixels*scale),azimuth:(Math.atan2(dz,dx)*180/Math.PI+360)%360,elevation:0};
+}
 function circularVelocity(pos,primary){if(!primary)return [0,0,0];let d=V.sub(pos,primary.pos),r=V.len(d);if(r<1e-9)return [...primary.vel];let t=V.unit(V.cross(d,[0,1,0]));if(V.len(t)<.001)t=V.unit(V.cross(d,[1,0,0]));return V.add(primary.vel,V.mul(t,Math.sqrt(G*primary.mass/r)));}
 function restore(data){if(!Array.isArray(data)||data.length>100)throw Error('Invalid body list');return data.map(b=>{if(!b||typeof b.name!=='string'||!Number.isFinite(b.mass)||b.mass<=0||b.mass>1e5||!Number.isFinite(b.radius)||b.radius<=0||b.radius>1e3||!['pos','vel'].every(k=>Array.isArray(b[k])&&b[k].length===3&&b[k].every(x=>Number.isFinite(x)&&Math.abs(x)<1e8)))throw Error('Invalid body data');return body({name:b.name.slice(0,64),mass:b.mass,radius:b.radius,pos:b.pos,vel:b.vel,kind:['star','earth','rock','gas','ring','ice','blackhole'].includes(b.kind)?b.kind:'rock',color:/^#[0-9a-f]{6}$/i.test(b.color)?b.color:'#aaaaaa',orbit:Number.isFinite(b.orbit)?Math.max(0,b.orbit):0});});}
-const api={G,EARTH,R_EARTH,R_SUN,V,catalog,body,solar,step,safeDt,circularVelocity,restore,centerMomentum,forceAnalysis,accelerations};if(typeof module!=='undefined')module.exports=api;else root.GalaxyPhysics=api;
+const api={G,EARTH,R_EARTH,R_SUN,V,catalog,body,solar,step,safeDt,circularVelocity,restore,centerMomentum,forceAnalysis,accelerations,launchVelocity,launchAim,MAX_LAUNCH_SPEED,KM_S_TO_AU_DAY};if(typeof module!=='undefined')module.exports=api;else root.GalaxyPhysics=api;
 })(typeof globalThis!=='undefined'?globalThis:this);

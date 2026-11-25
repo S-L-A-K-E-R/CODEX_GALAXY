@@ -24,3 +24,24 @@
 .force-source strong{font:10px var(--mono);white-space:nowrap}.force-source small{font:9px var(--mono)}
 .force-track{height:3px;background:#344552;align-self:center;border-radius:2px;overflow:hidden}.force-track i{display:block;height:100%;background:var(--amber)}
 @media(min-width:761px) and (max-width:1100px){.viewtools{flex-wrap:wrap;max-width:calc(100% - 535px)}}
+
+/* Two-stage object insertion and initial velocity editor */
+.placement{display:block;max-width:calc(100% - 24px)}
+.placement-main{display:flex;gap:10px;align-items:center}
+.placement-copy{flex:1;min-width:0}
+.placement-main>label{flex:none}
+.placement .placement-copy strong,.placement .placement-copy small{white-space:normal}
+.placement.aiming{width:min(455px,calc(100% - 24px));top:123px}
+#launchControls{border-top:1px solid #344552;margin-top:9px;padding-top:8px}
+.launch-readout{display:flex;justify-content:space-between;align-items:center;gap:8px;font:10px var(--mono);color:var(--muted)}
+.launch-readout strong{color:var(--green);font-size:14px}
+.launch-fields{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:5px;margin-top:7px}
+.placement .launch-fields label{max-width:none;min-width:0}
+.launch-fields input,.launch-fields select{width:100%;padding:5px;font:11px var(--mono)}
+#launchComponents,#launchError{white-space:normal;overflow-wrap:anywhere;line-height:1.35}
+#launchError{color:var(--amber)}
+.launch-actions{display:flex;justify-content:space-between;gap:6px;margin-top:8px}
+.placement .launch-actions button{font:11px var(--mono);padding:7px 9px}
+.placement .launch-confirm{color:#101921;background:var(--green);border-color:var(--green);font-weight:800}
+.placement .launch-confirm:hover:not(:disabled){color:#101921;background:#cbeaa5;border-color:#cbeaa5}
+@media(max-width:760px){.placement.aiming{top:85px;width:min(350px,94vw)}.launch-fields{grid-template-columns:repeat(2,minmax(0,1fr))}.placement-main{gap:6px}.placement-main>label{max-width:105px}}
