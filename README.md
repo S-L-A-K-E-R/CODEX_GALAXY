@@ -16,13 +16,19 @@ Then visit `http://localhost:8000`. Alternatively, publish the repository root u
 
 ## Prototype features
 
-- Start from a simplified Solar System (Sun and eight planets), empty space, a scenario library of nine additional experiments, or a JSON save. Each experiment is deterministic; Reset restores its initial conditions, including after saving and loading.
+- Start from a simplified Solar System (Sun and eight planets), a date-specific Solar System using **NOW**, empty space, a scenario library of nine additional experiments, or a JSON save. Each experiment is deterministic; Reset restores its initial conditions, including after saving and loading.
 - Searchable, categorized library of 14 celestial body templates: stars, planets, moons, asteroids, comets and compact objects.
 - Choose a body, then click the orbital plane to place it. Select circular orbital velocity around the locally dominant gravitational body, stationary, or the primary's velocity.
 - Inspect and edit mass, radius, name and the complete 3D state vector. Editing a state vector pauses the simulation.
 - Orbit, pan, zoom, track an object, show reference rings, show recorded trails, and toggle enhanced vs physical radii.
 - Pause or play; time warp from 1× to 1000×, with an accuracy-budget warning and throttling during difficult encounters.
 - Save a system locally or export/import a portable JSON file. The snapshot preserves positions, velocities and simulated time, not trail history or camera state.
+
+## Solar System Now
+
+Select **NOW** next to Solar System to initialize the Sun and eight planets at the current device-clock instant. The scene starts paused; the UTC simulation date advances with the existing time warp when you press Play. Reset recreates the original launch epoch, and local/JSON saves preserve it. Choose NOW again for a fresh snapshot.
+
+The calculation is entirely offline, using [NASA/JPL's approximate planetary elements, Table 1](https://ssd.jpl.nasa.gov/planets/approx_pos.html), valid for 1800–2050. Positions are elliptical and inclined; velocities are derived from the same position model. Earth represents the Earth–Moon barycenter with combined mass; moons and other small bodies are not separately modeled. UTC is used as an approximation to ephemeris time. This is not a live Horizons feed or a precision ephemeris, and subsequent evolution follows the sandbox's physics, not continuous ephemeris corrections.
 
 ## Scenario library
 
@@ -74,7 +80,7 @@ node test-physics.js
 
 ### Model limitations
 
-This is an educational/gameplay prototype, not a research simulator. Starting orbits are approximate circular coplanar orbits, not date-specific ephemerides. Reference rings show those approximate initial orbital distances, while trails show actual simulated history. Gravity is Newtonian, with small-scale softening; collisions merge mass and momentum but do not model fragmentation, atmospheres or thermodynamics. Compact objects do not model relativistic gravity, lensing, accretion or event horizons. Rendered radii are enhanced by default and can be switched to true physical radii. The renderer uses 3D coordinates and a perspective camera but not a WebGL mesh engine. The simulation is O(N²) with a 100-body cap. 1× corresponds to 0.2 simulated days per wall-clock second; 1000× requests 200 simulated days per second. The integrator may throttle during close encounters and on slower machines. The default scene is a planetary system rather than a full galaxy with billions of stars.
+This is an educational/gameplay prototype, not a research simulator. Classic starting orbits are approximate circular coplanar orbits; NOW uses approximate date-specific orbital elements. Reference rings show those approximate initial orbital distances, while trails show actual simulated history. Gravity is Newtonian, with small-scale softening; collisions merge mass and momentum but do not model fragmentation, atmospheres or thermodynamics. Compact objects do not model relativistic gravity, lensing, accretion or event horizons. Rendered radii are enhanced by default and can be switched to true physical radii. The renderer uses 3D coordinates and a perspective camera but not a WebGL mesh engine. The simulation is O(N²) with a 100-body cap. 1× corresponds to 0.2 simulated days per wall-clock second; 1000× requests 200 simulated days per second. The integrator may throttle during close encounters and on slower machines. The default scene is a planetary system rather than a full galaxy with billions of stars.
 
 ## Possible next steps
 
