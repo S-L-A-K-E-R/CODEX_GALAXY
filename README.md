@@ -106,3 +106,8 @@ This is an educational/gameplay prototype, not a research simulator. Classic sta
 - Additional scenario types and user-defined preset library
 - Orbit prediction and orbit-element editor, time rewind, timeline and energy diagnostics
 - GPU/worker-based gravity and larger systems
+
+
+## Exploration mode
+
+Open **Exploration Mode** from the main menu (or `exploration.html`). This standalone mission planner keeps the planetarium unchanged and uses its Newtonian gravity engine for the massive bodies. Choose a departure and target, start on the surface or in a 200 km training orbit, set a prediction horizon in hours, and select a point on the predicted path to add a timed maneuver. Each burn has an acceleration, duration, direction frame, reference body, angle and elevation; zero acceleration is a coast and the engine switches off automatically at the end of each burn. Overlapping burns are rejected. Earth surface launch has an editable two-burn example. Use the XZ/XY projections, moving-body reference frames, zoom/pan, timeline scrubber, play/pause, and 1–10,000× or automatic time warp. Orbit and flyby-science objectives are evaluated on sampled trajectories. The craft is a test particle; acceleration is prescribed, not a fuel/engine mass model. Atmosphere and planetary rotation are omitted. Osculating orbital elements are approximate and the bounded prediction workload may truncate long, close-orbit missions. Run `node test-flight.js` for deterministic burn, impact, replay, and orbit checks.

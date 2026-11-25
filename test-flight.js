@@ -1,0 +1,20 @@
+'use strict';
+const assert=require('node:assert/strict'),P=require('./physics.js'),F=require('./flight.js');
+const bs=P.solar(),ship=F.launch(bs,'Earth',200),coast=F.predict(bs,ship,[],6000);
+assert.equal(coast.status,'complete');
+const earth=coast.eph.at(coast.end).find(b=>b.name==='Earth'),o=F.orbit(F.sample(coast,coast.end),earth);
+assert(o.altitude>100&&o.altitude<400,'low orbit remains above surface');
+const n={start:100,duration:20,accel:2,angle:90,elevation:0,reference:'Earth',frame:'local'};
+const burn=F.predict(bs,ship,[n],600);
+assert(Math.abs(burn.deltaV-.04)<1e-9);
+assert(burn.points.some(p=>p.t===100)&&burn.points.some(p=>p.t===120),'exact burn boundaries');
+assert.throws(()=>F.predict(bs,ship,[n,{...n,start:110}],600),/overlap/);
+const surface=F.predict(bs,F.launch(bs,'Earth'),[],60);assert.equal(surface.status,'impact');assert.equal(surface.impact,'Earth');
+const repeat=F.predict(bs,ship,[n],600);assert.deepEqual(repeat.points,burn.points,'prediction/replay is deterministic');
+assert.deepEqual(F.sample(burn,0).pos,ship.pos);
+assert.equal(F.sample(burn,9999).t,burn.end);
+console.log('Flight prediction checks passed.');
+
+const ascent=F.predict(bs,F.launch(bs,'Earth'),[{...n,start:0,duration:90,accel:25,angle:0,frame:'inertial'},{...n,start:90,duration:340,accel:25,angle:85,frame:'inertial'}],10800);
+const insertion=F.sample(ascent,430),insertionOrbit=F.orbit(insertion,ascent.eph.at(430).find(b=>b.name==='Earth'));
+assert.equal(ascent.status,'complete');assert(insertionOrbit.bound&&insertionOrbit.periapsis>5,'surface ascent establishes orbit');
